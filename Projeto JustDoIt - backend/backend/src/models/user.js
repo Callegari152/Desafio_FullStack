@@ -1,20 +1,60 @@
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 
 const userSchema = new mongoose.Schema(
   {
-    _id: ObjectId,
-    name: String,
-    email: { type: String, unique: true, required: true },
-    password: { type: String, required: true }, // hash bcrypt
-    avatarUrl: String,
-    provider: { type: String, enum: ["local", "google"], default: "local" },
-    providerId: String, // id do Google, se OAuth
-    isEmailVerified: { type: Boolean, default: false },
-    createdAt: Date,
-    updatedAt: Date
-  }
+    name: {
+      type: String,
+      required: [true, "Nome é obrigatório"],
+      trim: true
+    },
+    email: {
+      type: String,
+      required: [true, "E-mail é obrigatório"],
+      unique: true,
+      lowercase: true,
+      trim: true
+    },
+    password: {
+      type: String,
+      required: [true, "Senha é obrigatória"],
+      minlength: 6,
+      select: false 
+    },
+    avatarUrl: {
+      type: String,
+      default: null
+    },
+    provider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local"
+    },
+    providerId: {
+      type: String,
+      default: null
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false
+    }
+  },
+  { timestamps: true } 
 );
 
-habitSchema.index({ userId: 1, isArchived: 1 });
+// Hash da senha ANTES de salvar no banco
+userSchema.pre("save", async function (next) {
+  // só re-hasheia se a senha foi modificada (evita re-hash em updates que não tocam a senha)
+  if (!this.isModified("password")) return next();
 
-export default mongoose.model("Habit", habitSchema);
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
+
+// Método de instância pra comparar senha no login
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+export default mongoose.model("User", userSchema);
